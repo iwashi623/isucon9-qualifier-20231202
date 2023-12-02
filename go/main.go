@@ -15,12 +15,15 @@ import (
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	// _ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 const (
@@ -313,7 +316,7 @@ func main() {
 		dbname,
 	)
 
-	dbx, err = sqlx.Open("mysql", dsn)
+	dbx, err = sqlx.Open("nrmysql", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to DB: %s.", err.Error())
 	}
@@ -321,42 +324,97 @@ func main() {
 
 	mux := goji.NewMux()
 
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName(os.Getenv("NEWRELIC_APP_NAME")),
+		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE_KEY")),
+		newrelic.ConfigAppLogForwardingEnabled(true),
+	)
+	if err != nil {
+		fmt.Printf("APP_NAME: %s\n", os.Getenv("NEWRELIC_APP_NAME"))
+		fmt.Printf("LICENSE_KEY: %s\n", os.Getenv("NEWRELIC_LICENSE_KEY"))
+		log.Fatal(err)
+	}
+
+	// // API
+	// mux.HandleFunc(pat.Post("/initialize"), postInitialize)
+	// mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
+	// mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
+	// mux.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
+	// mux.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
+	// mux.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
+	// mux.HandleFunc(pat.Post("/items/edit"), postItemEdit)
+	// mux.HandleFunc(pat.Post("/buy"), postBuy)
+	// mux.HandleFunc(pat.Post("/sell"), postSell)
+	// mux.HandleFunc(pat.Post("/ship"), postShip)
+	// mux.HandleFunc(pat.Post("/ship_done"), postShipDone)
+	// mux.HandleFunc(pat.Post("/complete"), postComplete)
+	// mux.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode)
+	// mux.HandleFunc(pat.Post("/bump"), postBump)
+	// mux.HandleFunc(pat.Get("/settings"), getSettings)
+	// mux.HandleFunc(pat.Post("/login"), postLogin)
+	// mux.HandleFunc(pat.Post("/register"), postRegister)
+	// mux.HandleFunc(pat.Get("/reports.json"), getReports)
+	// // Frontend
+	// mux.HandleFunc(pat.Get("/"), getIndex)
+	// mux.HandleFunc(pat.Get("/login"), getIndex)
+	// mux.HandleFunc(pat.Get("/register"), getIndex)
+	// mux.HandleFunc(pat.Get("/timeline"), getIndex)
+	// mux.HandleFunc(pat.Get("/categories/:category_id/items"), getIndex)
+	// mux.HandleFunc(pat.Get("/sell"), getIndex)
+	// mux.HandleFunc(pat.Get("/items/:item_id"), getIndex)
+	// mux.HandleFunc(pat.Get("/items/:item_id/edit"), getIndex)
+	// mux.HandleFunc(pat.Get("/items/:item_id/buy"), getIndex)
+	// mux.HandleFunc(pat.Get("/buy/complete"), getIndex)
+	// mux.HandleFunc(pat.Get("/transactions/:transaction_id"), getIndex)
+	// mux.HandleFunc(pat.Get("/users/:user_id"), getIndex)
+	// mux.HandleFunc(pat.Get("/users/setting"), getIndex)
+
+	// New Relic用のハンドラを追加
 	// API
-	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
-	mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
-	mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
-	mux.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
-	mux.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
-	mux.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
-	mux.HandleFunc(pat.Post("/items/edit"), postItemEdit)
-	mux.HandleFunc(pat.Post("/buy"), postBuy)
-	mux.HandleFunc(pat.Post("/sell"), postSell)
-	mux.HandleFunc(pat.Post("/ship"), postShip)
-	mux.HandleFunc(pat.Post("/ship_done"), postShipDone)
-	mux.HandleFunc(pat.Post("/complete"), postComplete)
-	mux.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode)
-	mux.HandleFunc(pat.Post("/bump"), postBump)
-	mux.HandleFunc(pat.Get("/settings"), getSettings)
-	mux.HandleFunc(pat.Post("/login"), postLogin)
-	mux.HandleFunc(pat.Post("/register"), postRegister)
-	mux.HandleFunc(pat.Get("/reports.json"), getReports)
+	mux.HandleFunc(pat.Post("/initialize"), newRelicMiddleware(app, postInitialize, "GET /initialize"))
+	mux.HandleFunc(pat.Get("/new_items.json"), newRelicMiddleware(app, getNewItems, "GET /new_items.json"))
+	mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), newRelicMiddleware(app, getNewCategoryItems, "GET /new_items/:root_category_id.json"))
+	mux.HandleFunc(pat.Get("/users/transactions.json"), newRelicMiddleware(app, getTransactions, "GET /users/transactions.json"))
+	mux.HandleFunc(pat.Get("/users/:user_id.json"), newRelicMiddleware(app, getUserItems, "GET /users/:user_id.json"))
+	mux.HandleFunc(pat.Get("/items/:item_id.json"), newRelicMiddleware(app, getItem, "GET /items/:item_id.json"))
+	mux.HandleFunc(pat.Post("/items/edit"), newRelicMiddleware(app, postItemEdit, "POST /items/edit"))
+	mux.HandleFunc(pat.Post("/buy"), newRelicMiddleware(app, postBuy, "POST /buy"))
+	mux.HandleFunc(pat.Post("/sell"), newRelicMiddleware(app, postSell, "POST /sell"))
+	mux.HandleFunc(pat.Post("/ship"), newRelicMiddleware(app, postShip, "POST /ship"))
+	mux.HandleFunc(pat.Post("/ship_done"), newRelicMiddleware(app, postShipDone, "POST /ship_done"))
+	mux.HandleFunc(pat.Post("/complete"), newRelicMiddleware(app, postComplete, "POST /complete"))
+	mux.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), newRelicMiddleware(app, getQRCode, "GET /transactions/:transaction_evidence_id.png"))
+	mux.HandleFunc(pat.Post("/bump"), newRelicMiddleware(app, postBump, "POST /bump"))
+	mux.HandleFunc(pat.Get("/settings"), newRelicMiddleware(app, getSettings, "GET /settings"))
+	mux.HandleFunc(pat.Post("/login"), newRelicMiddleware(app, postLogin, "POST /login"))
+	mux.HandleFunc(pat.Post("/register"), newRelicMiddleware(app, postRegister, "POST /register"))
+	mux.HandleFunc(pat.Get("/reports.json"), newRelicMiddleware(app, getReports, "GET /reports.json"))
 	// Frontend
-	mux.HandleFunc(pat.Get("/"), getIndex)
-	mux.HandleFunc(pat.Get("/login"), getIndex)
-	mux.HandleFunc(pat.Get("/register"), getIndex)
-	mux.HandleFunc(pat.Get("/timeline"), getIndex)
-	mux.HandleFunc(pat.Get("/categories/:category_id/items"), getIndex)
-	mux.HandleFunc(pat.Get("/sell"), getIndex)
-	mux.HandleFunc(pat.Get("/items/:item_id"), getIndex)
-	mux.HandleFunc(pat.Get("/items/:item_id/edit"), getIndex)
-	mux.HandleFunc(pat.Get("/items/:item_id/buy"), getIndex)
-	mux.HandleFunc(pat.Get("/buy/complete"), getIndex)
-	mux.HandleFunc(pat.Get("/transactions/:transaction_id"), getIndex)
-	mux.HandleFunc(pat.Get("/users/:user_id"), getIndex)
-	mux.HandleFunc(pat.Get("/users/setting"), getIndex)
+	mux.HandleFunc(pat.Get("/"), newRelicMiddleware(app, getIndex, "GET /"))
+	mux.HandleFunc(pat.Get("/login"), newRelicMiddleware(app, getIndex, "GET /login"))
+	mux.HandleFunc(pat.Get("/register"), newRelicMiddleware(app, getIndex, "GET /register"))
+	mux.HandleFunc(pat.Get("/timeline"), newRelicMiddleware(app, getIndex, "GET /timeline"))
+	mux.HandleFunc(pat.Get("/categories/:category_id/items"), newRelicMiddleware(app, getIndex, "GET /categories/:category_id/items"))
+	mux.HandleFunc(pat.Get("/sell"), newRelicMiddleware(app, getIndex, "POST /sell"))
+	mux.HandleFunc(pat.Get("/items/:item_id"), newRelicMiddleware(app, getIndex, "GET /items/:item_id"))
+	mux.HandleFunc(pat.Get("/items/:item_id/edit"), newRelicMiddleware(app, getIndex, "GET /items/:item_id/edit"))
+	mux.HandleFunc(pat.Get("/items/:item_id/buy"), newRelicMiddleware(app, getIndex, "GET /items/:item_id/buy"))
+	mux.HandleFunc(pat.Get("/buy/complete"), newRelicMiddleware(app, getIndex, "GET /buy/complete"))
+	mux.HandleFunc(pat.Get("/transactions/:transaction_id"), newRelicMiddleware(app, getIndex, "GET /transactions/:transaction_id"))
+	mux.HandleFunc(pat.Get("/users/:user_id"), newRelicMiddleware(app, getIndex, "GET /users/:user_id"))
+	mux.HandleFunc(pat.Get("/users/setting"), newRelicMiddleware(app, getIndex, "GET /users/setting"))
 	// Assets
 	mux.Handle(pat.Get("/*"), http.FileServer(http.Dir("../public")))
 	log.Fatal(http.ListenAndServe(":8000", mux))
+}
+
+func newRelicMiddleware(app *newrelic.Application, h func(http.ResponseWriter, *http.Request), transactonName string) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		txn := app.StartTransaction(transactonName)
+		defer txn.End()
+
+		h(w, r)
+	}
 }
 
 func getSession(r *http.Request) *sessions.Session {
@@ -466,7 +524,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	cmd.Stdout = os.Stderr
 	cmd.Run()
 	if err != nil {
-		outputErrorMsg(w, http.StatusInternalServerError, "exec init.sh error")
+		outputErrorMsg(w, http.StatusInternalServerError, "exec sql/init.sh error")
 		return
 	}
 
