@@ -323,12 +323,21 @@ func main() {
 
 	mux := goji.NewMux()
 
+	cmd := exec.Command("../newrelic/init.sh")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stderr
+	cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 	app, err := newrelic.NewApplication(
 		newrelic.ConfigAppName(os.Getenv("NEWRELIC_APP_NAME")),
 		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE_KEY")),
 		newrelic.ConfigAppLogForwardingEnabled(true),
 	)
 	if err != nil {
+		fmt.Printf("APP_NAME: %s\n", os.Getenv("NEWRELIC_APP_NAME"))
+		fmt.Printf("LICENSE_KEY: %s\n", os.Getenv("NEWRELIC_LICENSE_KEY"))
 		log.Fatal(err)
 	}
 
@@ -521,7 +530,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	cmd.Stdout = os.Stderr
 	cmd.Run()
 	if err != nil {
-		outputErrorMsg(w, http.StatusInternalServerError, "exec init.sh error")
+		outputErrorMsg(w, http.StatusInternalServerError, "exec sql/init.sh error")
 		return
 	}
 
