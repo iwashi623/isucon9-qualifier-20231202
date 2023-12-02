@@ -15,9 +15,10 @@ import (
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	// _ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
@@ -315,7 +316,7 @@ func main() {
 		dbname,
 	)
 
-	dbx, err = sqlx.Open("mysql", dsn)
+	dbx, err = sqlx.Open("nrmysql", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to DB: %s.", err.Error())
 	}
@@ -323,13 +324,6 @@ func main() {
 
 	mux := goji.NewMux()
 
-	cmd := exec.Command("../newrelic/init.sh")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stderr
-	cmd.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
 	app, err := newrelic.NewApplication(
 		newrelic.ConfigAppName(os.Getenv("NEWRELIC_APP_NAME")),
 		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE_KEY")),
